@@ -1,6 +1,7 @@
 package com.mjfactor.url_shortener;
 
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,6 +16,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.web.bind.annotation.PutMapping;
 
 @RestController
 @RequestMapping("/api")
@@ -22,9 +24,10 @@ import org.slf4j.LoggerFactory;
 public class ApplicationLogic {
 
     private static final Logger logger = LoggerFactory.getLogger(ApplicationLogic.class);
+
     private final UrlRepository urlRepository;
 
-    // Constructor injection (recommended over @Autowired)
+    // Constructor injection for UrlRepository
     public ApplicationLogic(UrlRepository urlRepository) {
         this.urlRepository = urlRepository;
     }
@@ -38,6 +41,25 @@ public class ApplicationLogic {
             String updatedAt) {
     }
 
+    private String generateUniqueShortCode(String url) {
+        String baseShortCode = Integer.toHexString(Math.abs(url.hashCode()));
+        String shortCode = baseShortCode;
+        int counter = 1;
+
+        // Keep generating until we find a unique short code
+        while (urlRepository.findByShortCode(shortCode).isPresent()) {
+            shortCode = baseShortCode + counter;
+            counter++;
+        }
+
+        return shortCode;
+    }
+
+    private String formatTimestamp(LocalDateTime timestamp) {
+        return timestamp.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + "Z";
+    }
+
+    // Endpoint to create a new shortened URL or return existing one
     @PostMapping("/shorten")
     public ResponseEntity<UrlShortenResponse> shortenUrl(@RequestBody String longUrl) {
         logger.info("Received URL to shorten: {}", longUrl);
@@ -84,25 +106,42 @@ public class ApplicationLogic {
                 updatedAt));
     }
 
-    private String generateUniqueShortCode(String url) {
-        String baseShortCode = Integer.toHexString(Math.abs(url.hashCode()));
-        String shortCode = baseShortCode;
-        int counter = 1;
+    // Endpoint to update the original URL for an existing short code
+    @PutMapping("/shorten/{shortCode}")
+    public ResponseEntity<UrlShortenResponse> updateUrl(@PathVariable String shortCode,
+            @RequestBody String newLongUrl) {
 
-        // Keep generating until we find a unique short code
-        while (urlRepository.findByShortCode(shortCode).isPresent()) {
-            shortCode = baseShortCode + counter;
-            counter++;
+        logger.info("Updating URL for short code: {}", shortCode);
+
+        // Clean the new URL
+        String cleanUrl = newLongUrl.trim();
+
+        // Find the existing URL entity by short code
+        Optional<UrlEntity> existingUrl = urlRepository.findByShortCode(shortCode);
+        if (existingUrl.isPresent()) {
+            UrlEntity urlEntity = existingUrl.get();
+            urlEntity.setOriginalUrl(cleanUrl);
+            urlEntity.setUpdatedAt(LocalDateTime.now());
+
+            // Save the updated entity
+            UrlEntity savedEntity = urlRepository.save(urlEntity);
+
+            // Format timestamps for response
+            String createdAt = formatTimestamp(savedEntity.getCreatedAt());
+            String updatedAt = formatTimestamp(savedEntity.getUpdatedAt());
+
+            return ResponseEntity.ok(new UrlShortenResponse(
+                    savedEntity.getId(),
+                    cleanUrl,
+                    "http://localhost:8080/api/" + savedEntity.getShortCode(),
+                    createdAt,
+                    updatedAt));
+        } else {
+            return ResponseEntity.notFound().build();
         }
-
-        return shortCode;
     }
 
-    private String formatTimestamp(LocalDateTime timestamp) {
-        return timestamp.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + "Z";
-    }
-
-    // Redirect endpoint for short URLs
+    // Endpoint to redirect short URLs to their original URLs and track access count
     @GetMapping("/{shortCode}")
     public ResponseEntity<Void> redirectToOriginal(@PathVariable String shortCode) {
         logger.info("Redirecting short code: {}", shortCode);
@@ -113,18 +152,57 @@ public class ApplicationLogic {
         if (urlEntity.isPresent()) {
             String originalUrl = urlEntity.get().getOriginalUrl();
 
+            // Increment access count
+            UrlEntity entity = urlEntity.get();
+            entity.setAccessCount(entity.getAccessCount() != null ? entity.getAccessCount() + 1 : 1L);
+            urlRepository.save(entity);
+
             // Create redirect response
             HttpHeaders headers = new HttpHeaders();
             headers.add("Location", originalUrl);
 
-            // Return 302 (Found) redirect
-            return new ResponseEntity<>(headers, HttpStatus.FOUND);
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .headers(headers)
+                    .build();
         } else {
             // Short code not found, return 404
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            return ResponseEntity.notFound().build();
         }
     }
 
+    // Endpoint to delete a shortened URL by short code
+    @DeleteMapping("/shorten/{shortCode}")
+    public ResponseEntity<Void> deleteUrl(@PathVariable String shortCode) {
+        Optional<UrlEntity> urlEntity = urlRepository.findByShortCode(shortCode);
+        if (urlEntity.isPresent()) {
+            urlRepository.deleteByShortCode(shortCode);
+            return ResponseEntity.noContent().build();
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    // Endpoint to get statistics for a shortened URL including access count
+    @GetMapping("/shorten/{shortCode}/stats")
+    public ResponseEntity<String> getUrlStats(@PathVariable String shortCode) {
+        Optional<UrlEntity> urlEntity = urlRepository.findByShortCode(shortCode);
+        if (urlEntity.isPresent()) {
+            UrlEntity entity = urlEntity.get();
+            String stats = String.format(
+                    "ID: %s, Original URL: %s, Short Code: %s, Created At: %s, Updated At: %s, Access Count: %d",
+                    entity.getId(),
+                    entity.getOriginalUrl(),
+                    entity.getShortCode(),
+                    formatTimestamp(entity.getCreatedAt()),
+                    formatTimestamp(entity.getUpdatedAt()),
+                    entity.getAccessCount() != null ? entity.getAccessCount() : 0L);
+            return ResponseEntity.ok(stats);
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    // Health check endpoint to verify application status
     @GetMapping("/health")
     public String getHealthStatus() {
         return "Application is running";

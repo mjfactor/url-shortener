@@ -3,6 +3,7 @@ package com.mjfactor.url_shortener;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
+import org.springframework.data.mongodb.core.index.Indexed;
 import java.time.LocalDateTime;
 
 @Document(collection = "urls")
@@ -12,9 +13,11 @@ public class UrlEntity {
     private String id;
 
     @Field("original_url")
+    @Indexed // Add index for faster lookups
     private String originalUrl;
 
     @Field("short_code")
+    @Indexed(unique = true) // Unique index for short codes
     private String shortCode;
 
     @Field("created_at")
@@ -22,6 +25,9 @@ public class UrlEntity {
 
     @Field("updated_at")
     private LocalDateTime updatedAt;
+
+    @Field("access_count")
+    private Long accessCount;
 
     // Default constructor (required by MongoDB)
     public UrlEntity() {
@@ -33,6 +39,7 @@ public class UrlEntity {
         this.shortCode = shortCode;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+        this.accessCount = 0L;
     }
 
     // Getters and setters
@@ -74,5 +81,13 @@ public class UrlEntity {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Long getAccessCount() {
+        return accessCount;
+    }
+
+    public void setAccessCount(Long accessCount) {
+        this.accessCount = accessCount;
     }
 }
