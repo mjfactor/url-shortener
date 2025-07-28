@@ -41,6 +41,16 @@ public class ApplicationLogic {
             String updatedAt) {
     }
 
+    // Response record for URL statistics
+    public record UrlStatsResponse(
+            String id,
+            String originalUrl,
+            String shortCode,
+            String createdAt,
+            String updatedAt,
+            Long accessCount) {
+    }
+
     private String generateUniqueShortCode(String url) {
         String baseShortCode = Integer.toHexString(Math.abs(url.hashCode()));
         String shortCode = baseShortCode;
@@ -184,12 +194,11 @@ public class ApplicationLogic {
 
     // Endpoint to get statistics for a shortened URL including access count
     @GetMapping("/shorten/{shortCode}/stats")
-    public ResponseEntity<String> getUrlStats(@PathVariable String shortCode) {
+    public ResponseEntity<UrlStatsResponse> getUrlStats(@PathVariable String shortCode) {
         Optional<UrlEntity> urlEntity = urlRepository.findByShortCode(shortCode);
         if (urlEntity.isPresent()) {
             UrlEntity entity = urlEntity.get();
-            String stats = String.format(
-                    "ID: %s, Original URL: %s, Short Code: %s, Created At: %s, Updated At: %s, Access Count: %d",
+            UrlStatsResponse stats = new UrlStatsResponse(
                     entity.getId(),
                     entity.getOriginalUrl(),
                     entity.getShortCode(),
