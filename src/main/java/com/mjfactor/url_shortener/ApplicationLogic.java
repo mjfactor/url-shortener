@@ -17,6 +17,8 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.PutMapping;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 @RestController
 @RequestMapping("/api")
@@ -51,6 +53,12 @@ public class ApplicationLogic {
             Long accessCount) {
     }
 
+    // Response record for error messages
+    public record ErrorResponse(
+            String error,
+            String message) {
+    }
+
     private String generateUniqueShortCode(String url) {
         String baseShortCode = Integer.toHexString(Math.abs(url.hashCode()));
         String shortCode = baseShortCode;
@@ -69,85 +77,95 @@ public class ApplicationLogic {
         return timestamp.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + "Z";
     }
 
-    // Endpoint to create a new shortened URL or return existing one
-    @PostMapping("/shorten")
-    public ResponseEntity<UrlShortenResponse> shortenUrl(@RequestBody String longUrl) {
-        logger.info("Received URL to shorten: {}", longUrl);
-
-        // Clean the URL
-        String cleanUrl = longUrl.trim();
-
-        // Check if URL already exists
-        Optional<UrlEntity> existingUrl = urlRepository.findByOriginalUrl(cleanUrl);
-        if (existingUrl.isPresent()) {
-            // Update the existing entry's timestamp and return it
-            UrlEntity existing = existingUrl.get();
-            existing.setUpdatedAt(LocalDateTime.now());
-            UrlEntity savedEntity = urlRepository.save(existing);
-
-            // Format timestamps for response
-            String createdAt = formatTimestamp(savedEntity.getCreatedAt());
-            String updatedAt = formatTimestamp(savedEntity.getUpdatedAt());
-
-            return ResponseEntity.ok(new UrlShortenResponse(
-                    savedEntity.getId(),
-                    cleanUrl,
-                    "http://localhost:8080/api/" + savedEntity.getShortCode(),
-                    createdAt,
-                    updatedAt));
+    private void validateUrl(String url) throws IllegalArgumentException {
+        // Check for null or empty URL
+        if (url == null || url.trim().isEmpty()) {
+            throw new IllegalArgumentException("URL cannot be null or empty");
         }
 
-        // Generate unique short code
-        String shortCode = generateUniqueShortCode(cleanUrl);
+        String cleanUrl = url.trim();
 
-        // Create and save URL entity to MongoDB
-        UrlEntity urlEntity = new UrlEntity(cleanUrl, shortCode);
-        UrlEntity savedEntity = urlRepository.save(urlEntity);
+        // Check URL length (reasonable limit)
+        if (cleanUrl.length() > 2048) {
+            throw new IllegalArgumentException("URL is too long (maximum 2048 characters)");
+        }
 
-        // Format timestamps for response
-        String createdAt = formatTimestamp(savedEntity.getCreatedAt());
-        String updatedAt = formatTimestamp(savedEntity.getUpdatedAt());
+        // Basic URL format validation
+        try {
+            URI uri = new URI(cleanUrl);
+            String scheme = uri.getScheme();
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(new UrlShortenResponse(
-                savedEntity.getId(),
-                cleanUrl,
-                "http://localhost:8080/api/" + shortCode, // Full redirect URL
-                createdAt,
-                updatedAt));
+            if (scheme == null) {
+                throw new IllegalArgumentException("URL must include a protocol (http:// or https://)");
+            }
+
+            scheme = scheme.toLowerCase();
+
+            // Only allow http and https protocols
+            if (!scheme.equals("http") && !scheme.equals("https")) {
+                throw new IllegalArgumentException("Only HTTP and HTTPS URLs are supported");
+            }
+
+            // Ensure the URI has a host
+            if (uri.getHost() == null || uri.getHost().isEmpty()) {
+                throw new IllegalArgumentException("URL must include a valid host");
+            }
+        } catch (URISyntaxException e) {
+            throw new IllegalArgumentException("Invalid URL format: " + e.getMessage());
+        }
     }
 
-    // Endpoint to update the original URL for an existing short code
-    @PutMapping("/shorten/{shortCode}")
-    public ResponseEntity<UrlShortenResponse> updateUrl(@PathVariable String shortCode,
-            @RequestBody String newLongUrl) {
+    // Endpoint to create a new shortened URL or return existing one
+    @PostMapping("/shorten")
+    public ResponseEntity<?> shortenUrl(@RequestBody String longUrl) {
+        logger.info("Received URL to shorten: {}", longUrl);
+        try {
+            validateUrl(longUrl);
 
-        logger.info("Updating URL for short code: {}", shortCode);
+            String cleanUrl = longUrl.trim();
 
-        // Clean the new URL
-        String cleanUrl = newLongUrl.trim();
+            // Check if URL already exists
+            Optional<UrlEntity> existingUrl = urlRepository.findByOriginalUrl(cleanUrl);
+            if (existingUrl.isPresent()) {
+                // Update the existing entry's timestamp and return it
+                UrlEntity existing = existingUrl.get();
+                existing.setUpdatedAt(LocalDateTime.now());
+                UrlEntity savedEntity = urlRepository.save(existing);
 
-        // Find the existing URL entity by short code
-        Optional<UrlEntity> existingUrl = urlRepository.findByShortCode(shortCode);
-        if (existingUrl.isPresent()) {
-            UrlEntity urlEntity = existingUrl.get();
-            urlEntity.setOriginalUrl(cleanUrl);
-            urlEntity.setUpdatedAt(LocalDateTime.now());
+                // Format timestamps for response
+                String createdAt = formatTimestamp(savedEntity.getCreatedAt());
+                String updatedAt = formatTimestamp(savedEntity.getUpdatedAt());
 
-            // Save the updated entity
+                return ResponseEntity.ok(new UrlShortenResponse(
+                        savedEntity.getId(),
+                        cleanUrl,
+                        "http://localhost:8080/api/" + savedEntity.getShortCode(),
+                        createdAt,
+                        updatedAt));
+            }
+
+            // Generate unique short code
+            String shortCode = generateUniqueShortCode(cleanUrl);
+
+            // Create and save URL entity to MongoDB
+            UrlEntity urlEntity = new UrlEntity(cleanUrl, shortCode);
             UrlEntity savedEntity = urlRepository.save(urlEntity);
 
             // Format timestamps for response
             String createdAt = formatTimestamp(savedEntity.getCreatedAt());
             String updatedAt = formatTimestamp(savedEntity.getUpdatedAt());
 
-            return ResponseEntity.ok(new UrlShortenResponse(
+            return ResponseEntity.status(HttpStatus.CREATED).body(new UrlShortenResponse(
                     savedEntity.getId(),
                     cleanUrl,
-                    "http://localhost:8080/api/" + savedEntity.getShortCode(),
+                    "http://localhost:8080/api/" + shortCode, // Full redirect URL
                     createdAt,
                     updatedAt));
-        } else {
-            return ResponseEntity.notFound().build();
+        } catch (IllegalArgumentException e) {
+            logger.warn("Validation error for URL: {}, Error: {}", longUrl, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(
+                    "Validation Error",
+                    e.getMessage()));
         }
     }
 
@@ -175,9 +193,49 @@ public class ApplicationLogic {
                     .headers(headers)
                     .build();
         } else {
-            // Short code not found, return 404
             return ResponseEntity.notFound().build();
         }
+    }
+
+    // Endpoint to update the original URL for an existing short code
+    @PutMapping("/shorten/{shortCode}")
+    public ResponseEntity<?> updateUrl(@PathVariable String shortCode,
+            @RequestBody String newLongUrl) {
+        logger.info("Updating URL for short code: {}", shortCode);
+        try {
+            validateUrl(newLongUrl);
+            String cleanUrl = newLongUrl.trim();
+
+            // Find the existing URL entity by short code
+            Optional<UrlEntity> existingUrl = urlRepository.findByShortCode(shortCode);
+            if (existingUrl.isPresent()) {
+                UrlEntity urlEntity = existingUrl.get();
+                urlEntity.setOriginalUrl(cleanUrl);
+                urlEntity.setUpdatedAt(LocalDateTime.now());
+
+                // Save the updated entity
+                UrlEntity savedEntity = urlRepository.save(urlEntity);
+
+                // Format timestamps for response
+                String createdAt = formatTimestamp(savedEntity.getCreatedAt());
+                String updatedAt = formatTimestamp(savedEntity.getUpdatedAt());
+
+                return ResponseEntity.ok(new UrlShortenResponse(
+                        savedEntity.getId(),
+                        cleanUrl,
+                        "http://localhost:8080/api/" + savedEntity.getShortCode(),
+                        createdAt,
+                        updatedAt));
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (IllegalArgumentException e) {
+            logger.error("Validation error updating URL for short code: {}, Error: {}", shortCode, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(
+                    "Validation Error",
+                    e.getMessage()));
+        }
+
     }
 
     // Endpoint to delete a shortened URL by short code
