@@ -42,7 +42,8 @@ public class UrlShortenerApplication {
 			String url,
 			String shortCode,
 			String createdAt,
-			String updatedAt) {
+			String updatedAt,
+			String expiresAt) {
 	}
 
 	// Response record for URL statistics
@@ -52,6 +53,7 @@ public class UrlShortenerApplication {
 			String shortCode,
 			String createdAt,
 			String updatedAt,
+			String expiresAt,
 			Long accessCount) {
 	}
 
@@ -77,6 +79,10 @@ public class UrlShortenerApplication {
 
 	private String formatTimestamp(LocalDateTime timestamp) {
 		return timestamp.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + "Z";
+	}
+
+	private boolean isUrlExpired(UrlEntity urlEntity) {
+		return urlEntity.getExpiresAt() != null && LocalDateTime.now().isAfter(urlEntity.getExpiresAt());
 	}
 
 	private void validateUrl(String url) throws IllegalArgumentException {
@@ -129,21 +135,30 @@ public class UrlShortenerApplication {
 			// Check if URL already exists
 			Optional<UrlEntity> existingUrl = urlRepository.findByOriginalUrl(cleanUrl);
 			if (existingUrl.isPresent()) {
-				// Update the existing entry's timestamp and return it
 				UrlEntity existing = existingUrl.get();
-				existing.setUpdatedAt(LocalDateTime.now());
-				UrlEntity savedEntity = urlRepository.save(existing);
 
-				// Format timestamps for response
-				String createdAt = formatTimestamp(savedEntity.getCreatedAt());
-				String updatedAt = formatTimestamp(savedEntity.getUpdatedAt());
+				// Check if the existing URL has expired
+				if (isUrlExpired(existing)) {
+					// Delete expired URL and create a new one
+					urlRepository.delete(existing);
+				} else {
+					// Update the existing entry's timestamp and return it
+					existing.setUpdatedAt(LocalDateTime.now());
+					UrlEntity savedEntity = urlRepository.save(existing);
 
-				return ResponseEntity.ok(new UrlShortenResponse(
-						savedEntity.getId(),
-						cleanUrl,
-						"http://localhost:8080/api/" + savedEntity.getShortCode(),
-						createdAt,
-						updatedAt));
+					// Format timestamps for response
+					String createdAt = formatTimestamp(savedEntity.getCreatedAt());
+					String updatedAt = formatTimestamp(savedEntity.getUpdatedAt());
+					String expiresAt = formatTimestamp(savedEntity.getExpiresAt());
+
+					return ResponseEntity.ok(new UrlShortenResponse(
+							savedEntity.getId(),
+							cleanUrl,
+							"http://localhost:8080/api/" + savedEntity.getShortCode(),
+							createdAt,
+							updatedAt,
+							expiresAt));
+				}
 			}
 
 			// Generate unique short code
@@ -156,13 +171,15 @@ public class UrlShortenerApplication {
 			// Format timestamps for response
 			String createdAt = formatTimestamp(savedEntity.getCreatedAt());
 			String updatedAt = formatTimestamp(savedEntity.getUpdatedAt());
+			String expiresAt = formatTimestamp(savedEntity.getExpiresAt());
 
 			return ResponseEntity.status(HttpStatus.CREATED).body(new UrlShortenResponse(
 					savedEntity.getId(),
 					cleanUrl,
 					"http://localhost:8080/api/" + shortCode, // Full redirect URL
 					createdAt,
-					updatedAt));
+					updatedAt,
+					expiresAt));
 		} catch (IllegalArgumentException e) {
 			logger.warn("Validation error for URL: {}, Error: {}", longUrl, e.getMessage());
 			return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(
@@ -180,10 +197,19 @@ public class UrlShortenerApplication {
 		Optional<UrlEntity> urlEntity = urlRepository.findByShortCode(shortCode);
 
 		if (urlEntity.isPresent()) {
-			String originalUrl = urlEntity.get().getOriginalUrl();
+			UrlEntity entity = urlEntity.get();
+
+			// Check if URL has expired
+			if (isUrlExpired(entity)) {
+				logger.info("URL has expired for short code: {}", shortCode);
+				// Optionally delete the expired URL
+				urlRepository.delete(entity);
+				return ResponseEntity.notFound().build();
+			}
+
+			String originalUrl = entity.getOriginalUrl();
 
 			// Increment access count
-			UrlEntity entity = urlEntity.get();
 			entity.setAccessCount(entity.getAccessCount() != null ? entity.getAccessCount() + 1 : 1L);
 			urlRepository.save(entity);
 
@@ -212,6 +238,13 @@ public class UrlShortenerApplication {
 			Optional<UrlEntity> existingUrl = urlRepository.findByShortCode(shortCode);
 			if (existingUrl.isPresent()) {
 				UrlEntity urlEntity = existingUrl.get();
+
+				// Check if URL has expired
+				if (isUrlExpired(urlEntity)) {
+					logger.info("Cannot update expired URL for short code: {}", shortCode);
+					return ResponseEntity.notFound().build();
+				}
+
 				urlEntity.setOriginalUrl(cleanUrl);
 				urlEntity.setUpdatedAt(LocalDateTime.now());
 
@@ -221,13 +254,15 @@ public class UrlShortenerApplication {
 				// Format timestamps for response
 				String createdAt = formatTimestamp(savedEntity.getCreatedAt());
 				String updatedAt = formatTimestamp(savedEntity.getUpdatedAt());
+				String expiresAt = formatTimestamp(savedEntity.getExpiresAt());
 
 				return ResponseEntity.ok(new UrlShortenResponse(
 						savedEntity.getId(),
 						cleanUrl,
 						"http://localhost:8080/api/" + savedEntity.getShortCode(),
 						createdAt,
-						updatedAt));
+						updatedAt,
+						expiresAt));
 			} else {
 				return ResponseEntity.notFound().build();
 			}
@@ -245,6 +280,14 @@ public class UrlShortenerApplication {
 	public ResponseEntity<Void> deleteUrl(@PathVariable String shortCode) {
 		Optional<UrlEntity> urlEntity = urlRepository.findByShortCode(shortCode);
 		if (urlEntity.isPresent()) {
+			UrlEntity entity = urlEntity.get();
+
+			// Check if URL has already expired
+			if (isUrlExpired(entity)) {
+				logger.info("URL already expired for short code: {}", shortCode);
+			}
+
+			// Delete the URL (whether expired or not)
 			urlRepository.deleteByShortCode(shortCode);
 			return ResponseEntity.noContent().build();
 		} else {
@@ -258,12 +301,22 @@ public class UrlShortenerApplication {
 		Optional<UrlEntity> urlEntity = urlRepository.findByShortCode(shortCode);
 		if (urlEntity.isPresent()) {
 			UrlEntity entity = urlEntity.get();
+
+			// Check if URL has expired
+			if (isUrlExpired(entity)) {
+				logger.info("URL has expired for short code: {}", shortCode);
+				// Optionally delete the expired URL
+				urlRepository.delete(entity);
+				return ResponseEntity.notFound().build();
+			}
+
 			UrlStatsResponse stats = new UrlStatsResponse(
 					entity.getId(),
 					entity.getOriginalUrl(),
 					entity.getShortCode(),
 					formatTimestamp(entity.getCreatedAt()),
 					formatTimestamp(entity.getUpdatedAt()),
+					formatTimestamp(entity.getExpiresAt()),
 					entity.getAccessCount() != null ? entity.getAccessCount() : 0L);
 			return ResponseEntity.ok(stats);
 		} else {

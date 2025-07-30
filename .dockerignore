@@ -1,0 +1,99 @@
+# Version Control
+.git
+.gitignore
+.gitattributes
+
+# Build tools and dependencies (Maven)
+.mvn/
+mvnw
+mvnw.cmd
+!target/*.jar
+
+# Source code (not needed in final image since we copy the JAR)
+src/
+pom.xml
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+.factorypath
+.springBeans
+.sts4-cache
+nbproject/
+.nb-gradle/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Environment and configuration files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+application-dev.properties
+application-prod.properties
+
+# Logs
+*.log
+logs/
+
+# Runtime and temporary files
+*.tmp
+*.swp
+*.swo
+*~
+.cache/
+tmp/
+temp/
+
+# Documentation (optional - uncomment if you don't want docs in image)
+README.md
+HELP.md
+*.md
+docs/
+
+# Docker files (to avoid recursive copy)
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+Jenkinsfile
+
+# Security and sensitive files
+*.key
+*.pem
+*.p12
+*.jks
+secrets.yaml
+secrets.yml
+
+# Testing
+**/test-results/
+coverage/
+.nyc_output/
+
+# Compiled bytecode (keeping only the final JAR)
+target/classes/
+target/test-classes/
+target/generated-sources/
+target/generated-test-sources/
+target/maven-archiver/
+target/maven-status/
+target/*.original

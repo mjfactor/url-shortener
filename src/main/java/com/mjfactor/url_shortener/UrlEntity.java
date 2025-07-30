@@ -5,6 +5,8 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 import org.springframework.data.mongodb.core.index.Indexed;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Date;
 
 @Document(collection = "urls")
 public class UrlEntity {
@@ -29,6 +31,13 @@ public class UrlEntity {
     @Field("access_count")
     private Long accessCount;
 
+    @Field("expires_at")
+    private LocalDateTime expiresAt;
+
+    @Field("ttl_date")
+    @Indexed(expireAfterSeconds = 0) // MongoDB TTL index - will expire based on this date
+    private Date ttlDate;
+
     // Default constructor (required by MongoDB)
     public UrlEntity() {
     }
@@ -40,6 +49,8 @@ public class UrlEntity {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
         this.accessCount = 0L;
+        this.expiresAt = LocalDateTime.now().plusMonths(6);
+        this.ttlDate = Date.from(this.expiresAt.atZone(ZoneId.systemDefault()).toInstant());
     }
 
     // Getters and setters
@@ -89,5 +100,30 @@ public class UrlEntity {
 
     public void setAccessCount(Long accessCount) {
         this.accessCount = accessCount;
+    }
+
+    public LocalDateTime getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(LocalDateTime expiresAt) {
+        this.expiresAt = expiresAt;
+        // Update TTL date when expiration is changed
+        if (expiresAt != null) {
+            this.ttlDate = Date.from(expiresAt.atZone(ZoneId.systemDefault()).toInstant());
+        }
+    }
+
+    public Date getTtlDate() {
+        return ttlDate;
+    }
+
+    public void setTtlDate(Date ttlDate) {
+        this.ttlDate = ttlDate;
+    }
+
+    // Helper method to check if URL has expired
+    public boolean isExpired() {
+        return expiresAt != null && LocalDateTime.now().isAfter(expiresAt);
     }
 }
