@@ -14,6 +14,20 @@ A simple and efficient URL shortening service built with Spring Boot and MongoDB
 - ✅ **URL Validation**: Ensure only valid HTTP/HTTPS URLs are accepted
 - ✅ **Duplicate Prevention**: Reuse existing short codes for duplicate URLs
 
+## Live Demo
+
+🚀 **The application is live and deployed on Azure!**
+
+**Production URL:** https://url-shortener.proudmoss-71bb2d25.southeastasia.azurecontainerapps.io/
+
+Try it out directly:
+```bash
+# Create a short URL
+curl -X POST https://url-shortener.proudmoss-71bb2d25.southeastasia.azurecontainerapps.io/api/shorten \
+  -H "Content-Type: application/json" \
+  -d "https://www.example.com/your-long-url"
+```
+
 ## Technologies Used
 
 - **Java 21** - Programming language
@@ -63,9 +77,23 @@ Before running this application, make sure you have:
 
    The application will start on `http://localhost:8080`
 
+## Deployment
+
+This application is currently deployed and running on **Azure Container Apps** at:
+- **Production URL**: https://url-shortener.proudmoss-71bb2d25.southeastasia.azurecontainerapps.io/
+- **API Base URL**: https://url-shortener.proudmoss-71bb2d25.southeastasia.azurecontainerapps.io/api
+
+The deployment uses:
+- **Azure Container Apps** for hosting
+- **MongoDB Atlas** for the database (free tier)
+- **Docker containerization** for consistent deployment
+
+You can use the live service immediately without any setup!
+
 ## API Endpoints
 
-### Base URL: `http://localhost:8080/api`
+### Production URL: `https://url-shortener.proudmoss-71bb2d25.southeastasia.azurecontainerapps.io/api`
+### Local Development URL: `http://localhost:8080/api`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -80,8 +108,8 @@ Before running this application, make sure you have:
 
 #### 1. Shorten a URL
 ```bash
-# Request
-curl -X POST http://localhost:8080/api/shorten \
+# Request (Production)
+curl -X POST https://url-shortener.proudmoss-71bb2d25.southeastasia.azurecontainerapps.io/api/shorten \
   -H "Content-Type: application/json" \
   -d "https://www.example.com/very/long/url/that/needs/shortening"
 
@@ -89,7 +117,7 @@ curl -X POST http://localhost:8080/api/shorten \
 {
   "id": "507f1f77bcf86cd799439011",
   "url": "https://www.example.com/very/long/url/that/needs/shortening",
-  "shortCode": "http://localhost:8080/api/abc123",
+  "shortCode": "https://url-shortener.proudmoss-71bb2d25.southeastasia.azurecontainerapps.io/api/abc123",
   "createdAt": "2025-01-29T10:30:00Z",
   "updatedAt": "2025-01-29T10:30:00Z"
 }
@@ -97,15 +125,15 @@ curl -X POST http://localhost:8080/api/shorten \
 
 #### 2. Access a shortened URL
 ```bash
-# Visit in browser or curl
-curl -L http://localhost:8080/api/abc123
+# Visit in browser or curl (Production)
+curl -L https://url-shortener.proudmoss-71bb2d25.southeastasia.azurecontainerapps.io/api/abc123
 # Redirects to: https://www.example.com/very/long/url/that/needs/shortening
 ```
 
 #### 3. Get URL statistics
 ```bash
-# Request
-curl http://localhost:8080/api/shorten/abc123/stats
+# Request (Production)
+curl https://url-shortener.proudmoss-71bb2d25.southeastasia.azurecontainerapps.io/api/shorten/abc123/stats
 
 # Response
 {
@@ -120,16 +148,16 @@ curl http://localhost:8080/api/shorten/abc123/stats
 
 #### 4. Update a URL
 ```bash
-# Request
-curl -X PUT http://localhost:8080/api/shorten/abc123 \
+# Request (Production)
+curl -X PUT https://url-shortener.proudmoss-71bb2d25.southeastasia.azurecontainerapps.io/api/shorten/abc123 \
   -H "Content-Type: application/json" \
   -d "https://www.updated-example.com"
 ```
 
 #### 5. Delete a URL
 ```bash
-# Request
-curl -X DELETE http://localhost:8080/api/shorten/abc123
+# Request (Production)
+curl -X DELETE https://url-shortener.proudmoss-71bb2d25.southeastasia.azurecontainerapps.io/api/shorten/abc123
 ```
 
 ## Project Structure
