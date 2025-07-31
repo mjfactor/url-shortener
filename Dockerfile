@@ -2,14 +2,12 @@
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
 
-# Cache dependencies
-COPY mvnw mvnw.cmd pom.xml ./
-COPY .mvn .mvn
-RUN ./mvnw dependency:go-offline -B
+# Copy *all* sources in one COPY
+COPY . .
 
-# Build
-COPY src ./src
-RUN ./mvnw clean package -DskipTests
+# Make wrapper executable and build
+RUN chmod +x ./mvnw && \
+    ./mvnw -B clean package -DskipTests
 
 # ---------- runtime stage ----------
 FROM openjdk:21-jdk-slim
