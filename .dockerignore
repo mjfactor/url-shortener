@@ -3,15 +3,8 @@
 .gitignore
 .gitattributes
 
-# Build tools and dependencies (Maven)
-.mvn/
-mvnw
-mvnw.cmd
 !target/*.jar
 
-# Source code (not needed in final image since we copy the JAR)
-src/
-pom.xml
 
 # IDE files
 .vscode/

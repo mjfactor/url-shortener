@@ -1,24 +1,30 @@
-# ---------- build stage ----------
-FROM maven:3.9-eclipse-temurin-21 AS build
+# Build stage
+FROM maven:3.9-openjdk-21 AS build
 WORKDIR /app
 
-# Copy *all* sources in one COPY
-COPY . .
+# Copy Maven wrapper and pom.xml first for better caching
+COPY mvnw mvnw.cmd pom.xml ./
+COPY .mvn .mvn
 
-# Make wrapper executable and build
-RUN chmod +x ./mvnw && \
-    ./mvnw -B clean package -DskipTests
+# Download dependencies (this layer will be cached if pom.xml doesn't change)
+RUN ./mvnw dependency:go-offline -B
 
-# ---------- runtime stage ----------
-FROM openjdk:21-jdk-slim
+# Copy source code
+COPY src ./src
 
-# Create user
+# Build the application
+RUN ./mvnw clean package -DskipTests
+
+# Runtime stage
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+
+# Create user for security
 RUN addgroup --system spring && adduser --system spring --ingroup spring
-
-# Copy single JAR with correct ownership
-COPY --from=build --chown=spring:spring \
-    /app/target/url-shortener-*.jar /app.jar
-
 USER spring:spring
+
+# Copy the JAR from build stage
+COPY --from=build /app/target/*.jar app.jar
+
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "/app.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]   
