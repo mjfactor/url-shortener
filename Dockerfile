@@ -1,5 +1,5 @@
 # Build stage
-FROM maven:3.9.4-openjdk-21-slim AS build
+FROM maven:3.9-openjdk-21 AS build
 WORKDIR /app
 
 # Copy Maven wrapper and pom.xml first for better caching
@@ -16,7 +16,7 @@ COPY src ./src
 RUN ./mvnw clean package -DskipTests
 
 # Runtime stage
-FROM openjdk:21-jdk-slim
+FROM eclipse-temurin:21-jre
 WORKDIR /app
 
 # Create user for security
