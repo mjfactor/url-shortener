@@ -1,0 +1,85 @@
+name: MongoDB Ping Keep-Alive
+
+# Run every 4 days at midnight UTC
+on:
+  schedule:
+    - cron: '0 0 */4 * *'  # Every 4 days at 00:00 UTC
+  
+  # Allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  ping-mongodb:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install MongoDB driver
+        run: npm install mongodb
+
+      - name: Ping MongoDB
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          MONGO_DATABASE: ${{ secrets.MONGO_DATABASE }}
+        run: |
+          node -e "
+          const { MongoClient } = require('mongodb');
+          
+          async function pingMongoDB() {
+            const uri = process.env.MONGO_URI;
+            const database = process.env.MONGO_DATABASE || 'url_shortener';
+            
+            if (!uri) {
+              console.error('❌ MONGO_URI secret not configured');
+              process.exit(1);
+            }
+            
+            const client = new MongoClient(uri);
+            
+            try {
+              console.log('🔌 Connecting to MongoDB...');
+              await client.connect();
+              
+              console.log('📡 Pinging MongoDB...');
+              const db = client.db(database);
+              const result = await db.admin().ping();
+              
+              console.log('✅ MongoDB ping successful!');
+              console.log('📊 Ping result:', result);
+              
+              // Optional: Get some basic stats
+              const stats = await db.stats();
+              console.log('📈 Database stats:');
+              console.log('  - Collections:', stats.collections);
+              console.log('  - Data size:', Math.round(stats.dataSize / 1024), 'KB');
+              
+            } catch (error) {
+              console.error('❌ MongoDB ping failed:', error.message);
+              process.exit(1);
+            } finally {
+              await client.close();
+              console.log('🔚 Connection closed');
+            }
+          }
+          
+          pingMongoDB();
+          "
+
+      - name: Log completion
+        if: success()
+        run: |
+          echo "✅ MongoDB ping completed successfully at $(date)"
+          echo "🕒 Next ping scheduled in 4 days"
+
+      - name: Log failure
+        if: failure()
+        run: |
+          echo "❌ MongoDB ping failed at $(date)"
+          echo "🔍 Check the logs above for error details"
