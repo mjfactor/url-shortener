@@ -44,16 +44,13 @@ jobs:
             console.log('🔧 MongoDB URI found, connecting with TLS...');
             console.log('📦 Target database:', databaseName);
             
-            // Configure MongoDB client with proper TLS/SSL options for Atlas
+            // Configure MongoDB client with simplified options for GitHub Actions
             const clientOptions = {
-              tls: true,                          // Enable TLS for Atlas
-              tlsAllowInvalidCertificates: false, // Ensure certificate validation
               connectTimeoutMS: 30000,            // 30 seconds connection timeout
               serverSelectionTimeoutMS: 30000,    // 30 seconds server selection timeout
               socketTimeoutMS: 30000,             // 30 seconds socket timeout
               maxPoolSize: 10,                    // Limit connection pool
-              retryWrites: true,                  // Enable retryable writes
-              w: 'majority'                       // Write concern
+              retryWrites: true                   // Enable retryable writes
             };
             
             client = new MongoClient(mongoUri, clientOptions);
@@ -138,6 +135,7 @@ jobs:
       env:
         MONGODB_URI: ${{ secrets.MONGODB_URI }}
         MONGO_DATABASE: ${{ secrets.MONGO_DATABASE || 'url_shortener' }}
+        NODE_OPTIONS: '--use-openssl-ca'
         
     - name: Cleanup
       if: always()
