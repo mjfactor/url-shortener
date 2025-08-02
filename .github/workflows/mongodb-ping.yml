@@ -1,108 +1,114 @@
-name: MongoDB Ping Keep-Alive
+name: MongoDB Ping
 
-# Run every 4 days at midnight UTC
+# Run every 4 days at midnight UTC to keep the database connection alive
 on:
   schedule:
-    - cron: '0 0 */4 * *'  # Every 4 days at 00:00 UTC
-  
-  # Allow manual triggering
-  workflow_dispatch:
+    - cron: '0 0 */4 * *'
+  workflow_dispatch: # Allow manual triggering
 
 jobs:
   ping-mongodb:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install MongoDB driver
-        run: npm install mongodb
-
-      - name: Ping MongoDB
-        env:
-          MONGO_URI: ${{ secrets.MONGO_URI }}
-          MONGO_DATABASE: ${{ secrets.MONGO_DATABASE }}
-        run: |
-          node -e "
-          const { MongoClient } = require('mongodb');
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install MongoDB driver
+      run: npm install mongodb
+      
+    - name: Ping MongoDB
+      run: |
+        cat << 'EOF' > ping-mongodb.js
+        const { MongoClient } = require('mongodb');
+        
+        async function pingMongoDB() {
+          let client;
           
-          async function pingMongoDB() {
-            const uri = process.env.MONGO_URI;
-            const database = process.env.MONGO_DATABASE || 'url_shortener';
+          try {
+            console.log('🔌 Connecting to MongoDB...');
             
-            if (!uri) {
-              console.error('❌ MONGO_URI secret not configured');
-              process.exit(1);
+            // Use GitHub secret for MongoDB URI, fallback to env var for local testing
+            const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+            
+            if (!mongoUri) {
+              throw new Error('MongoDB URI not found. Please set MONGODB_URI secret in GitHub.');
             }
             
-            // MongoDB Atlas specific options for GitHub Actions
-            const options = {
-              tls: true,
-              tlsAllowInvalidCertificates: true,
-              tlsAllowInvalidHostnames: true,
-              serverSelectionTimeoutMS: 10000,
-              connectTimeoutMS: 10000,
-              socketTimeoutMS: 10000,
-            };
+            client = new MongoClient(mongoUri);
+            await client.connect();
             
-            const client = new MongoClient(uri, options);
+            console.log('✅ Connected to MongoDB successfully');
             
-            try {
-              console.log('🔌 Connecting to MongoDB Atlas...');
-              await client.connect();
-              
-              console.log('📡 Pinging MongoDB...');
-              const db = client.db(database);
-              const result = await db.admin().ping();
-              
+            // Get database instance
+            const db = client.db();
+            
+            // Run ping command - this is a no-op that tests server responsiveness
+            console.log('🏓 Sending ping command...');
+            const result = await db.command({ ping: 1 });
+            
+            if (result.ok === 1) {
               console.log('✅ MongoDB ping successful!');
-              console.log('📊 Ping result:', result);
+              console.log('📊 Response:', JSON.stringify(result, null, 2));
               
-              // Optional: Get some basic stats (with error handling)
-              try {
-                const stats = await db.stats();
-                console.log('📈 Database stats:');
-                console.log('  - Collections:', stats.collections || 0);
-                console.log('  - Data size:', Math.round((stats.dataSize || 0) / 1024), 'KB');
-              } catch (statsError) {
-                console.log('ℹ️  Database stats not available:', statsError.message);
-              }
-              
-            } catch (error) {
-              console.error('❌ MongoDB ping failed:', error.message);
-              console.error('🔍 Error details:', {
-                name: error.name,
-                code: error.code,
-                codeName: error.codeName
+              // Also get server status for additional health info
+              const serverStatus = await db.command({ 
+                serverStatus: 1,
+                connections: 1,
+                network: 1 
               });
-              process.exit(1);
-            } finally {
+              
+              console.log('🔗 Current connections:', serverStatus.connections?.current || 'N/A');
+              console.log('📡 Network bytes in:', serverStatus.network?.bytesIn || 'N/A');
+              console.log('📡 Network bytes out:', serverStatus.network?.bytesOut || 'N/A');
+              
+            } else {
+              throw new Error('MongoDB ping returned non-OK status');
+            }
+            
+          } catch (error) {
+            console.error('❌ MongoDB ping failed:', error.message);
+            
+            if (error.code) {
+              console.error('🔧 Error code:', error.code);
+            }
+            
+            if (error.cause) {
+              console.error('🔍 Root cause:', error.cause.message);
+            }
+            
+            process.exit(1);
+            
+          } finally {
+            if (client) {
               try {
                 await client.close();
-                console.log('🔚 Connection closed');
+                console.log('🔌 MongoDB connection closed');
               } catch (closeError) {
-                console.log('⚠️  Error closing connection:', closeError.message);
+                console.error('⚠️  Error closing connection:', closeError.message);
               }
             }
           }
-          
-          pingMongoDB();
-          "
-
-      - name: Log completion
-        if: success()
-        run: |
-          echo "✅ MongoDB ping completed successfully at $(date)"
-          echo "🕒 Next ping scheduled in 4 days"
-
-      - name: Log failure
-        if: failure()
-        run: |
-          echo "❌ MongoDB ping failed at $(date)"
-          echo "🔍 Check the logs above for error details"
+        }
+        
+        // Run the ping function
+        pingMongoDB().then(() => {
+          console.log('🎉 MongoDB ping workflow completed successfully');
+        }).catch((error) => {
+          console.error('💥 Workflow failed:', error.message);
+          process.exit(1);
+        });
+        EOF
+        
+        node ping-mongodb.js
+      env:
+        MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        
+    - name: Cleanup
+      if: always()
+      run: rm -f ping-mongodb.js
