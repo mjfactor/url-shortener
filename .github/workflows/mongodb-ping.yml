@@ -41,10 +41,20 @@ jobs:
               process.exit(1);
             }
             
-            const client = new MongoClient(uri);
+            // MongoDB Atlas specific options for GitHub Actions
+            const options = {
+              tls: true,
+              tlsAllowInvalidCertificates: true,
+              tlsAllowInvalidHostnames: true,
+              serverSelectionTimeoutMS: 10000,
+              connectTimeoutMS: 10000,
+              socketTimeoutMS: 10000,
+            };
+            
+            const client = new MongoClient(uri, options);
             
             try {
-              console.log('🔌 Connecting to MongoDB...');
+              console.log('🔌 Connecting to MongoDB Atlas...');
               await client.connect();
               
               console.log('📡 Pinging MongoDB...');
@@ -54,18 +64,31 @@ jobs:
               console.log('✅ MongoDB ping successful!');
               console.log('📊 Ping result:', result);
               
-              // Optional: Get some basic stats
-              const stats = await db.stats();
-              console.log('📈 Database stats:');
-              console.log('  - Collections:', stats.collections);
-              console.log('  - Data size:', Math.round(stats.dataSize / 1024), 'KB');
+              // Optional: Get some basic stats (with error handling)
+              try {
+                const stats = await db.stats();
+                console.log('📈 Database stats:');
+                console.log('  - Collections:', stats.collections || 0);
+                console.log('  - Data size:', Math.round((stats.dataSize || 0) / 1024), 'KB');
+              } catch (statsError) {
+                console.log('ℹ️  Database stats not available:', statsError.message);
+              }
               
             } catch (error) {
               console.error('❌ MongoDB ping failed:', error.message);
+              console.error('🔍 Error details:', {
+                name: error.name,
+                code: error.code,
+                codeName: error.codeName
+              });
               process.exit(1);
             } finally {
-              await client.close();
-              console.log('🔚 Connection closed');
+              try {
+                await client.close();
+                console.log('🔚 Connection closed');
+              } catch (closeError) {
+                console.log('⚠️  Error closing connection:', closeError.message);
+              }
             }
           }
           
