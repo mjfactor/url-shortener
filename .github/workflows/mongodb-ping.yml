@@ -35,18 +35,34 @@ jobs:
             
             // Use GitHub secret for MongoDB URI, fallback to env var for local testing
             const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+            const databaseName = process.env.MONGO_DATABASE || 'url_shortener';
             
             if (!mongoUri) {
               throw new Error('MongoDB URI not found. Please set MONGODB_URI secret in GitHub.');
             }
             
-            client = new MongoClient(mongoUri);
+            console.log('🔧 MongoDB URI found, connecting with TLS...');
+            console.log('📦 Target database:', databaseName);
+            
+            // Configure MongoDB client with proper TLS/SSL options for Atlas
+            const clientOptions = {
+              tls: true,                          // Enable TLS for Atlas
+              tlsAllowInvalidCertificates: false, // Ensure certificate validation
+              connectTimeoutMS: 30000,            // 30 seconds connection timeout
+              serverSelectionTimeoutMS: 30000,    // 30 seconds server selection timeout
+              socketTimeoutMS: 30000,             // 30 seconds socket timeout
+              maxPoolSize: 10,                    // Limit connection pool
+              retryWrites: true,                  // Enable retryable writes
+              w: 'majority'                       // Write concern
+            };
+            
+            client = new MongoClient(mongoUri, clientOptions);
             await client.connect();
             
             console.log('✅ Connected to MongoDB successfully');
             
             // Get database instance
-            const db = client.db();
+            const db = client.db(databaseName);
             
             // Run ping command - this is a no-op that tests server responsiveness
             console.log('🏓 Sending ping command...');
@@ -57,15 +73,28 @@ jobs:
               console.log('📊 Response:', JSON.stringify(result, null, 2));
               
               // Also get server status for additional health info
+              console.log('📡 Fetching server status...');
               const serverStatus = await db.command({ 
                 serverStatus: 1,
                 connections: 1,
-                network: 1 
+                network: 1,
+                version: 1
               });
               
-              console.log('🔗 Current connections:', serverStatus.connections?.current || 'N/A');
-              console.log('📡 Network bytes in:', serverStatus.network?.bytesIn || 'N/A');
+              console.log('�️  MongoDB version:', serverStatus.version || 'N/A');
+              console.log('�🔗 Current connections:', serverStatus.connections?.current || 'N/A');
+              console.log('� Available connections:', serverStatus.connections?.available || 'N/A');
+              console.log('�📡 Network bytes in:', serverStatus.network?.bytesIn || 'N/A');
               console.log('📡 Network bytes out:', serverStatus.network?.bytesOut || 'N/A');
+              
+              // Test database operations
+              console.log('🧪 Testing database access...');
+              const collections = await db.listCollections().toArray();
+              console.log('📚 Collections found:', collections.length);
+              
+              if (collections.length > 0) {
+                console.log('📋 Collection names:', collections.map(c => c.name).join(', '));
+              }
               
             } else {
               throw new Error('MongoDB ping returned non-OK status');
@@ -108,6 +137,7 @@ jobs:
         node ping-mongodb.js
       env:
         MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        MONGO_DATABASE: ${{ secrets.MONGO_DATABASE || 'url_shortener' }}
         
     - name: Cleanup
       if: always()
