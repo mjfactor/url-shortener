@@ -154,7 +154,8 @@ public class UrlShortenerApplication {
 					return ResponseEntity.ok(new UrlShortenResponse(
 							savedEntity.getId(),
 							cleanUrl,
-							"http://localhost:8080/api/" + savedEntity.getShortCode(),
+							"https://url-shortener.proudmoss-71bb2d25.southeastasia.azurecontainerapps.io/api/"
+									+ savedEntity.getShortCode(),
 							createdAt,
 							updatedAt,
 							expiresAt));
