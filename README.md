@@ -2,7 +2,6 @@
 
 A simple and efficient URL shortening service built with Spring Boot and MongoDB. This project allows you to create short URLs, track access statistics, and manage your shortened links through a RESTful API.
 
-> **Assignment Project**: This project is part of the [URL Shortening Service](https://roadmap.sh/projects/url-shortening-service) assignment from roadmap.sh.
 
 ## Features
 
