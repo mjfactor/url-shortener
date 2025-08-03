@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Shortener Service</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-link"></i>
+                <h1>URL Shortener</h1>
+            </div>
+            <p class="subtitle">Transform your long URLs into short, shareable links</p>
+        </header>
+
+        <main class="main-content">
+            <!-- API Documentation Section -->
+            <section class="card documentation-section">
+                <h2><i class="fas fa-book"></i> API Documentation</h2>
+                <div class="api-endpoints">
+                    <div class="endpoint">
+                        <div class="method post">POST</div>
+                        <div class="path">/api/shorten</div>
+                        <div class="description">Create a new shortened URL</div>
+                    </div>
+                    <div class="endpoint">
+                        <div class="method get">GET</div>
+                        <div class="path">/api/{shortCode}</div>
+                        <div class="description">Redirect to original URL</div>
+                    </div>
+                    <div class="endpoint">
+                        <div class="method get">GET</div>
+                        <div class="path">/api/shorten/{shortCode}/stats</div>
+                        <div class="description">Get URL statistics</div>
+                    </div>
+                    <div class="endpoint">
+                        <div class="method put">PUT</div>
+                        <div class="path">/api/shorten/{shortCode}</div>
+                        <div class="description">Update existing URL</div>
+                    </div>
+                    <div class="endpoint">
+                        <div class="method delete">DELETE</div>
+                        <div class="path">/api/shorten/{shortCode}</div>
+                        <div class="description">Delete URL</div>
+                    </div>
+                    <div class="endpoint">
+                        <div class="method get">GET</div>
+                        <div class="path">/api/health</div>
+                        <div class="description">Health check</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2025 URL Shortener Service. All rights reserved.</p>
+        </footer>
+    </div>
+</body>
+
+</html>
