@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.PutMapping;
 import java.net.URI;
 import java.net.URISyntaxException;
+import jakarta.servlet.http.HttpServletRequest;
 
 @SpringBootApplication
 @RestController
@@ -85,6 +86,25 @@ public class UrlShortenerApplication {
 		return urlEntity.getExpiresAt() != null && LocalDateTime.now().isAfter(urlEntity.getExpiresAt());
 	}
 
+	private String buildBaseUrl(HttpServletRequest request) {
+		String scheme = request.getScheme();
+		String serverName = request.getServerName();
+		int serverPort = request.getServerPort();
+		String contextPath = request.getContextPath();
+
+		StringBuilder baseUrl = new StringBuilder();
+		baseUrl.append(scheme).append("://").append(serverName);
+
+		// Only include port if it's not the default port for the scheme
+		if ((scheme.equals("http") && serverPort != 80) ||
+				(scheme.equals("https") && serverPort != 443)) {
+			baseUrl.append(":").append(serverPort);
+		}
+
+		baseUrl.append(contextPath).append("/api/");
+		return baseUrl.toString();
+	}
+
 	private void validateUrl(String url) throws IllegalArgumentException {
 		// Check for null or empty URL
 		if (url == null || url.trim().isEmpty()) {
@@ -125,7 +145,7 @@ public class UrlShortenerApplication {
 
 	// Endpoint to create a new shortened URL or return existing one
 	@PostMapping("/shorten")
-	public ResponseEntity<?> shortenUrl(@RequestBody String longUrl) {
+	public ResponseEntity<?> shortenUrl(@RequestBody String longUrl, HttpServletRequest request) {
 		logger.info("Received URL to shorten: {}", longUrl);
 		try {
 			validateUrl(longUrl);
@@ -154,8 +174,7 @@ public class UrlShortenerApplication {
 					return ResponseEntity.ok(new UrlShortenResponse(
 							savedEntity.getId(),
 							cleanUrl,
-							"https://url-shortener.proudmoss-71bb2d25.southeastasia.azurecontainerapps.io/api/"
-									+ savedEntity.getShortCode(),
+							buildBaseUrl(request) + savedEntity.getShortCode(),
 							createdAt,
 							updatedAt,
 							expiresAt));
@@ -177,7 +196,7 @@ public class UrlShortenerApplication {
 			return ResponseEntity.status(HttpStatus.CREATED).body(new UrlShortenResponse(
 					savedEntity.getId(),
 					cleanUrl,
-					"http://localhost:8080/api/" + shortCode, // Full redirect URL
+					buildBaseUrl(request) + shortCode, // Full redirect URL
 					createdAt,
 					updatedAt,
 					expiresAt));
@@ -229,7 +248,7 @@ public class UrlShortenerApplication {
 	// Endpoint to update the original URL for an existing short code
 	@PutMapping("/shorten/{shortCode}")
 	public ResponseEntity<?> updateUrl(@PathVariable String shortCode,
-			@RequestBody String newLongUrl) {
+			@RequestBody String newLongUrl, HttpServletRequest request) {
 		logger.info("Updating URL for short code: {}", shortCode);
 		try {
 			validateUrl(newLongUrl);
@@ -260,7 +279,7 @@ public class UrlShortenerApplication {
 				return ResponseEntity.ok(new UrlShortenResponse(
 						savedEntity.getId(),
 						cleanUrl,
-						"http://localhost:8080/api/" + savedEntity.getShortCode(),
+						buildBaseUrl(request) + savedEntity.getShortCode(),
 						createdAt,
 						updatedAt,
 						expiresAt));
